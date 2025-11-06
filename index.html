@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PNG to APNG 変換</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
+
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* ドラッグオーバー時のスタイル */
+        .drag-over {
+            border-color: #3b82f6; /* blue-500 */
+            background-color: #262f4d; /* slate-800の暗い版 */
+        }
+        
+        /* --- ドラッグ＆ドロップ並び替え用スタイル --- */
+        /* ドラッグ中のアイテム本体 (ゴーストではない) */
+        .dragging {
+            opacity: 0.5;
+            background: #4a5568; /* slate-600 */
+            cursor: grabbing;
+        }
+        /* li 自体にカーソルスタイルを追加 */
+        #media-list li[draggable="true"],
+        #frames-list li[draggable="true"] {
+            cursor: grab;
+        }
+        
+        /* 挿入位置インジケータ (上) */
+        .drag-over-indicator-before {
+            position: relative;
+        }
+        .drag-over-indicator-before::before {
+            content: '';
+            position: absolute;
+            top: -2px; /* 線の太さ分上に */
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-color: #3b82f6; /* blue-500 */
+            z-index: 10;
+        }
+        
+        /* 挿入位置インジケータ (下) */
+        .drag-over-indicator-after {
+            position: relative;
+        }
+        .drag-over-indicator-after::after {
+            content: '';
+            position: absolute;
+            bottom: -2px; /* 線の太さ分下に */
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-color: #3b82f6; /* blue-500 */
+            z-index: 10;
+        }
+
+        /* フレームリストのプレビュー画像 */
+        .frame-preview {
+            width: 4rem; /* w-16 */
+            height: 4rem; /* h-16 */
+            object-fit: cover;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-gray-300 min-h-screen p-4 sm:p-8">
+
+    <!-- ▼▼▼ ローディングオーバーレイを追加 ▼▼▼ -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center hidden">
+        <div class="flex flex-col items-center">
+            <!-- スピナー (Tailwind CSS) -->
+            <svg class="animate-spin h-10 w-10 text-white mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <span class="text-white text-lg font-semibold">APNGに変換中...</span>
+            <span id="loading-progress" class="text-white text-sm mt-2"></span>
+        </div>
+    </div>
+    <!-- ▲▲▲ ローディングオーバーレイを追加 ▲▲▲ -->
+
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 text-center">
+            <h1 class="text-3xl font-bold text-white mb-2">PNG to APNG 変換ツール</h1>
+        </header>
+
+        <!-- カラムコンテナ -->
+        <div class="flex flex-col md:flex-row md:space-x-8">
+
+            <div class="md:w-2/5 flex flex-col">
+
+                <div id="drop-zone" class="border-4 border-dashed border-slate-700 rounded-lg p-8 text-center cursor-pointer hover:border-blue-600 hover:bg-slate-800 h-96 flex flex-col">
+                    <input type="file" id="file-input" multiple accept="image/png" class="hidden">
+                    <label for="file-input" class="cursor-pointer flex flex-col items-center justify-center h-full w-full">
+                        <svg class="mx-auto h-12 w-12 text-slate-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="m2.25 15.75 5.159-5.159a2.25 2.25 0 0 1 3.182 0l5.159 5.159m-1.5-1.5 1.409-1.409a2.25 2.25 0 0 1 3.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 0 0 1.5-1.5V6a1.5 1.5 0 0 0-1.5-1.5H3.75A1.5 1.5 0 0 0 2.25 6v12a1.5 1.5 0 0 0 1.5 1.5Zm10.5-11.25h.008v.008h-.008V8.25Zm.375 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z" />
+                        </svg>
+                        <p class="mt-2 text-lg font-semibold text-white">PNGファイルをドラッグ＆ドロップ</p>
+                        <p class="text-sm text-slate-400">またはクリックしてファイルを選択</p>
+                        <p class="text-xs text-slate-500 mt-2">対応: PNG</p>
+                    </label>
+                </div>
+                
+            </div>
+            
+            <section id="media-pool-section" class="mt-8 md:mt-0 md:w-3/5 flex flex-col">
+
+                <!-- ファイルリストコンテナ (高さを h-96 で固定) -->
+                <div class="bg-slate-800 rounded-lg p-4 flex flex-col h-96">
+                    <div class="flex justify-between items-center mb-4 flex-shrink-0">
+                        <h2 class="text-2xl font-semibold text-white">ファイルリスト</h2>
+                        
+                        <div class="flex items-center space-x-4">
+                            <!-- ソートボタン -->
+                            <div class="flex items-center space-x-2">
+                                <button id="sort-asc-btn" class="text-slate-300 hover:text-white disabled:opacity-50" title="名前順 (昇順)" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+                                    </svg>
+                                </button>
+                                <button id="sort-desc-btn" class="text-slate-300 hover:text-white disabled:opacity-50" title="名前順 (降順)" disabled>
+                                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 15l7-7 7 7" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <!-- クリアボタン -->
+                            <button id="clear-pool-btn" class="bg-red-600 text-white text-xs font-bold px-3 py-1 rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed" title="すべてクリア" disabled>
+                                すべてクリア
+                            </button>
+                        </div>
+
+                    </div>
+                    
+                    <ul id="media-list" class="space-y-1 overflow-y-auto flex-grow h-0">
+                        <li id="empty-pool-message" class="text-slate-400 text-center py-16">ファイルがありません</li>
+                    </ul>
+                    
+                    <!-- フレームに送るボタン -->
+                    <div class="mt-4 flex-shrink-0">
+                        <button id="send-to-frames-btn" class="w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            ▼ フレームに送る
+                        </button>
+                    </div>
+                </div>
+
+            </section>
+        
+        </div> <!-- カラムコンテナ終了 -->
+        
+        <!-- メニューバーと変換ボタンのセクション -->
+        <section class="mt-8">
+            <!-- メニューバー (変換オプション) -->
+            <div class="bg-slate-800 rounded-lg p-4 mb-4">
+                <h3 class="text-xl font-semibold text-white mb-3">変換オプション</h3>
+                <div class="flex flex-wrap gap-4 items-end">
+                    <div class="flex-1 min-w-[200px]">
+                        <label for="delay-input" class="block text-sm font-medium text-slate-300 mb-1">保持時間 (ms)</label>
+                        <div class="flex space-x-2">
+                            <input type="number" id="delay-input" value="100" min="1" step="1" class="w-full bg-slate-700 text-white border border-slate-600 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <button id="apply-delay-all-btn" class="bg-indigo-600 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-indigo-700 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0" title="全フレームに適用" disabled>
+                                適用
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <label for="loop-input" class="block text-sm font-medium text-slate-300 mb-1">ループ回数 (0=無限)</label>
+                        <input type="number" id="loop-input" value="0" min="0" step="1" class="w-full bg-slate-700 text-white border border-slate-600 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <label for="output-width" class="block text-sm font-medium text-slate-300 mb-1">幅 (px)</label>
+                        <input type="number" id="output-width" min="1" step="1" placeholder="自動" class="w-full bg-slate-700 text-white border border-slate-600 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div class="flex-1 min-w-[200px]">
+                        <label for="output-height" class="block text-sm font-medium text-slate-300 mb-1">高さ (px)</label>
+                        <input type="number" id="output-height" min="1" step="1" placeholder="自動" class="w-full bg-slate-700 text-white border border-slate-600 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <!-- ▼▼▼ 減色オプションをプルダウンに変更 ▼▼▼ -->
+                    <div class="flex-1 min-w-[200px]">
+                        <label for="color-depth-select" class="block text-sm font-medium text-slate-300 mb-1">色深度 (減色)</label>
+                        <select id="color-depth-select" class="w-full bg-slate-700 text-white border border-slate-600 rounded-md p-2 h-[42px] focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="0">圧縮なし (フルカラー)</option>
+                            <option value="8">8ビット (256色)</option>
+                            <option value="4">4ビット (16色)</option>
+                            <option value="2">2ビット (4色)</option>
+                            <option value="1">1ビット (2色)</option>
+                        </select>
+                    </div>
+                    <!-- ▲▲▲ 減色オプションをプルダウンに変更 ▲▲▲ -->
+                </div>
+            </div>
+
+            <section id="frames-list-section" class="mt-8">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-4">
+                    <div>
+                        <h3 class="text-2xl font-semibold text-white">フレームシーケンス</h3>
+                        <div class="flex items-center flex-wrap space-x-4 text-sm text-slate-400 mt-2">
+                            <span>
+                                フレーム数: <strong id="seq-frame-count" class="text-slate-300 font-medium">0</strong>
+                            </span>
+                            <span>
+                                合計時間: <strong id="seq-duration" class="text-slate-300 font-medium">0.00</strong> s
+                            </span>
+                            <span>
+                                平均FPS: <strong id="seq-avg-fps" class="text-slate-300 font-medium">0.0</strong>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="flex-shrink-0 self-start sm:self-center">
+                        <button id="convert-btn-top" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled>
+                            <svg class="animate-spin h-5 w-5 mr-3 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span class="btn-text">APNGに変換</span>
+                        </button>
+                    </div>
+                </div>
+                <div id="frames-list-container" class="bg-slate-800 rounded-lg p-1 min-h-[10rem]">
+                    <ul id="frames-list" class="space-y-1">
+                        <li id="empty-frames-message" class="text-slate-400 text-center py-16">
+                            「▼ フレームに送る」ボタンでファイルを追加してください
+                        </li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- 変換ボタン (下) -->
+            <div class="mt-8">
+                <button id="convert-btn-bottom" class="w-full bg-green-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-green-700 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled>
+                    <svg class="animate-spin h-5 w-5 mr-3 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    <span class="btn-text">APNGに変換</span>
+                </button>
+            </div>
+            
+        </section>
+        
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM要素 ---
+            const dropZone = document.getElementById('drop-zone');
+            const fileInput = document.getElementById('file-input');
+            const mediaList = document.getElementById('media-list');
+            const clearPoolBtn = document.getElementById('clear-pool-btn');
+            const sortAscBtn = document.getElementById('sort-asc-btn');
+            const sortDescBtn = document.getElementById('sort-desc-btn');
+            const sendToFramesBtn = document.getElementById('send-to-frames-btn');
+            
+            const delayInput = document.getElementById('delay-input');
+            const loopInput = document.getElementById('loop-input');
+            const outputWidthInput = document.getElementById('output-width');
+            const outputHeightInput = document.getElementById('output-height');
+            const applyDelayAllBtn = document.getElementById('apply-delay-all-btn');
+            
+            // ▼▼▼ quantizeToggle から colorDepthSelect に変更 ▼▼▼
+            const colorDepthSelect = document.getElementById('color-depth-select');
+            // ▲▲▲ quantizeToggle から colorDepthSelect に変更 ▲▲▲
+            
+            const framesListContainer = document.getElementById('frames-list-container');
+            const framesList = document.getElementById('frames-list');
+            
+            const emptyPoolMessage = document.getElementById('empty-pool-message');
+            const emptyFramesMessage = document.getElementById('empty-frames-message');
+            
+            if (emptyPoolMessage) emptyPoolMessage.remove();
+            if (emptyFramesMessage) emptyFramesMessage.remove();
+            
+            const convertBtnTop = document.getElementById('convert-btn-top');
+            const convertBtnBottom = document.getElementById('convert-btn-bottom');
+            
+            const seqFrameCountEl = document.getElementById('seq-frame-count');
+            const seqDurationEl = document.getElementById('seq-duration');
+            const seqAvgFpsEl = document.getElementById('seq-avg-fps');
+
+            const loadingOverlay = document.getElementById('loading-overlay');
+            const loadingProgress = document.getElementById('loading-progress');
+            
+            const mediaPool = []; // { id, name, size, type, dataUrl, originalFile }
+            const framesPool = []; // { id, name, dataUrl, originalFile, delay }
+            
+            let draggingId = null;
+            let dragOverId = null;
+            let draggingList = null; 
+
+            const supportedTypes = ['image/png'];
+
+            // --- イベントリスナー ---
+
+            fileInput.addEventListener('change', (e) => {
+                handleFiles(e.target.files);
+                e.target.value = null;
+            });
+
+            dropZone.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add('drag-over');
+            });
+            dropZone.addEventListener('dragleave', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-over');
+            });
+            dropZone.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove('drag-over');
+                handleFiles(e.dataTransfer.files);
+            });
+            
+            sortAscBtn.addEventListener('click', () => {
+                mediaPool.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+                renderMediaPool();
+            });
+            sortDescBtn.addEventListener('click', () => {
+                mediaPool.sort((a, b) => b.name.localeCompare(a.name, undefined, { numeric: true }));
+                renderMediaPool();
+            });
+            
+            clearPoolBtn.addEventListener('click', () => {
+                if (mediaPool.length === 0) return;
+                mediaPool.length = 0;
+                renderMediaPool();
+            });
+
+            sendToFramesBtn.addEventListener('click', async () => {
+                if (mediaPool.length === 0) return;
+                
+                const defaultDelay = parseInt(delayInput.value, 10) || 100;
+                const wasFramesPoolEmpty = framesPool.length === 0;
+
+                const newFrames = mediaPool.map(item => ({
+                    id: crypto.randomUUID(),
+                    name: item.name,
+                    dataUrl: item.dataUrl,
+                    originalFile: item.originalFile, 
+                    delay: defaultDelay
+                }));
+                
+                framesPool.push(...newFrames);
+                
+                mediaPool.length = 0;
+                renderMediaPool();
+                renderFramesList();
+                
+                if (wasFramesPoolEmpty && framesPool.length > 0 && !outputWidthInput.value && !outputHeightInput.value) {
+                    try {
+                        await setDefaultDimensions(framesPool[0]);
+                    } catch (err) {
+                        console.error("Failed to set default dimensions:", err);
+                    }
+                }
+            });
+
+            applyDelayAllBtn.addEventListener('click', () => {
+                if (framesPool.length === 0) return;
+                
+                const newDelay = parseInt(delayInput.value, 10);
+                if (isNaN(newDelay) || newDelay < 1) {
+                    console.warn("Invalid delay value for applying all:", newDelay);
+                    return;
+                }
+                
+                framesPool.forEach(frame => {
+                    frame.delay = newDelay;
+                });
+                
+                renderFramesList();
+            });
+
+            // --- 入力値検証リスナー (blurイベント) ---
+            delayInput.addEventListener('blur', () => {
+                const min = 1;
+                let value = parseInt(delayInput.value, 10);
+                if (isNaN(value) || value < min) {
+                    delayInput.value = min;
+                } else {
+                    delayInput.value = Math.round(value);
+                }
+            });
+            
+            loopInput.addEventListener('blur', () => {
+                const min = 0;
+                let value = parseInt(loopInput.value, 10);
+                if (isNaN(value) || value < min) {
+                    loopInput.value = min;
+                } else {
+                    loopInput.value = Math.round(value);
+                }
+            });
+
+            outputWidthInput.addEventListener('blur', () => {
+                if (outputWidthInput.value === '') return;
+                const min = 1;
+                let value = parseInt(outputWidthInput.value, 10);
+                if (isNaN(value) || value < min) {
+                    outputWidthInput.value = min;
+                } else {
+                    outputWidthInput.value = Math.round(value);
+                }
+            });
+
+            outputHeightInput.addEventListener('blur', () => {
+                if (outputHeightInput.value === '') return;
+                const min = 1;
+                let value = parseInt(outputHeightInput.value, 10);
+                if (isNaN(value) || value < min) {
+                    outputHeightInput.value = min;
+                } else {
+                    outputHeightInput.value = Math.round(value);
+                }
+            });
+
+            // --- ファイル処理 ---
+            async function handleFiles(files) {
+                const newFiles = Array.from(files).filter(file => {
+                    return supportedTypes.includes(file.type);
+                });
+                
+                if (newFiles.length === 0) return;
+
+                const processingPromises = newFiles.map(file => processFile(file));
+                
+                try {
+                    const processedFiles = await Promise.all(processingPromises.filter(p => p !== null));
+                    mediaPool.push(...processedFiles);
+                } catch (err) {
+                    console.error("Error during file processing:", err);
+                } finally {
+                    renderMediaPool();
+                }
+            }
+
+            async function processFile(file) {
+                const id = crypto.randomUUID();
+                try {
+                    if (supportedTypes.includes(file.type)) {
+                        const dataUrl = await blobToDataURL(file);
+                        return {
+                            id: id,
+                            name: file.name,
+                            size: file.size,
+                            type: file.type,
+                            dataUrl: dataUrl,
+                            originalFile: file, 
+                        };
+                    } else {
+                        console.warn(`Skipping unsupported file: ${file.name}`);
+                        return null;
+                    }
+                } catch (err) {
+                    console.error(`Error processing file ${file.name}:`, err);
+                    return null;
+                }
+            }
+
+            function blobToDataURL(blob) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = (e) => reject(e);
+                    reader.readAsDataURL(blob);
+                });
+            }
+
+            // --- UI描画 (ファイルリスト) ---
+
+            function setDefaultDimensions(frameItem) {
+                return new Promise((resolve, reject) => {
+                    if (!frameItem) {
+                        return reject(new Error("No frame item provided."));
+                    }
+                    
+                    const img = new Image();
+                    img.onload = () => {
+                        if (!outputWidthInput.value) {
+                            outputWidthInput.value = img.width;
+                        }
+                        if (!outputHeightInput.value) {
+                            outputHeightInput.value = img.height;
+                        }
+                        resolve({ width: img.width, height: img.height });
+                    };
+                    img.onerror = (err) => {
+                        console.error("Failed to load image to get dimensions:", frameItem.name);
+                        reject(new Error(`Image load error: ${frameItem.name}`));
+                    };
+                    img.src = frameItem.dataUrl;
+                });
+            }
+
+            function updateSequenceStats() {
+                const frameCount = framesPool.length;
+                const totalDelayMs = framesPool.reduce((sum, frame) => sum + (frame.delay || 0), 0);
+                const totalSeconds = totalDelayMs / 1000.0;
+                
+                let avgFps = 0;
+                if (totalSeconds > 0) {
+                    avgFps = frameCount / totalSeconds;
+                }
+
+                if (seqFrameCountEl) seqFrameCountEl.textContent = frameCount;
+                if (seqDurationEl) seqDurationEl.textContent = totalSeconds.toFixed(2);
+                if (seqAvgFpsEl) seqAvgFpsEl.textContent = avgFps.toFixed(1);
+            }
+
+
+            function renderMediaPool() {
+                const hasFiles = mediaPool.length > 0;
+
+                clearPoolBtn.disabled = !hasFiles;
+                sortAscBtn.disabled = !hasFiles;
+                sortDescBtn.disabled = !hasFiles;
+                sendToFramesBtn.disabled = !hasFiles;
+
+                mediaList.innerHTML = '';
+                
+                if (!hasFiles) {
+                    if (emptyPoolMessage) {
+                        mediaList.appendChild(emptyPoolMessage);
+                    }
+                }
+
+                mediaPool.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'flex justify-between items-center bg-slate-700 p-3 rounded-lg shadow-md cursor-grab';
+                    li.dataset.id = item.id;
+                    li.draggable = true;
+
+                    li.innerHTML = `
+                        <div class="flex-grow overflow-hidden mr-4">
+                            <p class="font-medium text-white truncate" title="${item.name}">${item.name}</p>
+                        </div>
+                        <button class="remove-btn text-red-500 hover:text-red-400 flex-shrink-0" title="削除">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    `;
+                    mediaList.appendChild(li);
+                });
+            }
+
+            // --- UI描画 (フレームシーケンス) ---
+
+            function renderFramesList() {
+                const hasFrames = framesPool.length > 0;
+                
+                convertBtnTop.disabled = !hasFrames;
+                convertBtnBottom.disabled = !hasFrames;
+                applyDelayAllBtn.disabled = !hasFrames;
+
+                framesList.innerHTML = '';
+                
+                if (!hasFrames) {
+                    if (emptyFramesMessage) {
+                        framesList.appendChild(emptyFramesMessage);
+                    }
+                }
+
+                framesPool.forEach((item, index) => {
+                    const li = document.createElement('li');
+                    li.className = 'flex items-center bg-slate-700 p-3 rounded-lg shadow-md space-x-4 cursor-grab';
+                    li.dataset.id = item.id;
+                    li.draggable = true;
+
+                    li.innerHTML = `
+                        <span class="text-sm font-medium text-slate-400 w-6 text-center flex-shrink-0">${index + 1}</span>
+                        <img src="${item.dataUrl}" alt="${item.name}" class="frame-preview rounded-md border border-slate-600 flex-shrink-0">
+                        <div class="flex-grow overflow-hidden min-w-0">
+                            <p class="font-medium text-white truncate" title="${item.name}">${item.name}</p>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <label for="frame-delay-${item.id}" class="block text-xs font-medium text-slate-300 mb-1 text-right">保持時間 (ms)</label>
+                            <input type="number" id="frame-delay-${item.id}" value="${item.delay}" min="1" step="1" class="w-24 bg-slate-800 text-white border border-slate-600 rounded-md p-2 focus:outline-none focus:ring-2 focus:ring-blue-500 frame-delay-input" data-id="${item.id}">
+                        </div>
+                        <button class="remove-frame-btn text-red-500 hover:text-red-400 flex-shrink-0" title="削除">
+                            <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                    `;
+                    framesList.appendChild(li);
+                });
+                
+                updateSequenceStats();
+            }
+
+
+            // --- イベントリスナー (リスト共通) ---
+
+            mediaList.addEventListener('click', (e) => {
+                const removeBtn = e.target.closest('.remove-btn');
+                if (removeBtn) {
+                    const li = removeBtn.closest('li');
+                    const id = li.dataset.id;
+                    const index = mediaPool.findIndex(item => item.id === id);
+                    if (index > -1) {
+                        mediaPool.splice(index, 1);
+                    }
+                    renderMediaPool();
+                }
+            });
+
+            framesListContainer.addEventListener('click', (e) => {
+                const removeBtn = e.target.closest('.remove-frame-btn');
+                if (removeBtn) {
+                    const li = removeBtn.closest('li');
+                    const id = li.dataset.id;
+                    const index = framesPool.findIndex(f => f.id === id);
+                    if (index > -1) {
+                        framesPool.splice(index, 1);
+                    }
+                    renderFramesList();
+
+                    if (framesPool.length > 0) {
+                        if (index === 0 && (!outputWidthInput.value || !outputHeightInput.value)) {
+                            setDefaultDimensions(framesPool[0]).catch(console.error);
+                        }
+                    } else {
+                        outputWidthInput.value = '';
+                        outputHeightInput.value = '';
+                    }
+                }
+            });
+            
+            framesListContainer.addEventListener('change', (e) => {
+                if (e.target.classList.contains('frame-delay-input')) {
+                    const id = e.target.dataset.id;
+                    const item = framesPool.find(f => f.id === id);
+                    
+                    const min = 1;
+                    let newDelay = parseInt(e.target.value, 10);
+
+                    if (isNaN(newDelay) || newDelay < min) {
+                        e.target.value = min;
+                        newDelay = min;
+                    } else {
+                        newDelay = Math.round(newDelay);
+                        e.target.value = newDelay;
+                    }
+                    
+                    if (item) {
+                        item.delay = newDelay;
+                    }
+                    
+                    updateSequenceStats();
+                }
+            });
+
+            // --- ドラッグ＆ドロップによる並び替え (両リスト対応) ---
+
+            function handleDragStart(e, listType) {
+                const li = e.target.closest('li');
+                if (!li) return;
+                draggingId = li.dataset.id;
+                draggingList = listType;
+                e.dataTransfer.setData('text/plain', draggingId);
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => {
+                    li.classList.add('dragging');
+                }, 0);
+            }
+
+            function handleDragEnd(e) {
+                if (draggingId) {
+                    const li = document.querySelector(`li[data-id="${draggingId}"]`);
+                    if (li) {
+                        li.classList.remove('dragging');
+                    }
+                }
+                document.querySelectorAll('.drag-over-indicator-before, .drag-over-indicator-after').forEach(el => {
+                    el.classList.remove('drag-over-indicator-before', 'drag-over-indicator-after');
+                });
+                draggingId = null;
+                dragOverId = null;
+                draggingList = null;
+            }
+
+            function handleDragOver(e) {
+                e.preventDefault();
+                const targetLi = e.target.closest('li');
+                
+                if (!targetLi || targetLi.dataset.id === draggingId || !e.currentTarget.contains(targetLi)) {
+                    if (dragOverId) {
+                        const oldTarget = document.querySelector(`li[data-id="${dragOverId}"]`);
+                        if(oldTarget) {
+                            oldTarget.classList.remove('drag-over-indicator-before', 'drag-over-indicator-after');
+                        }
+                    }
+                    dragOverId = null;
+                    return;
+                }
+                
+                const updateIndicator = (target) => {
+                    const rect = target.getBoundingClientRect();
+                    const isAfter = e.clientY > rect.top + rect.height / 2;
+                    if (isAfter) {
+                        target.classList.add('drag-over-indicator-after');
+                        target.classList.remove('drag-over-indicator-before');
+                    } else {
+                        target.classList.add('drag-over-indicator-before');
+                        target.classList.remove('drag-over-indicator-after');
+                    }
+                };
+
+                if (targetLi.dataset.id !== dragOverId) {
+                    document.querySelectorAll('.drag-over-indicator-before, .drag-over-indicator-after').forEach(el => {
+                        el.classList.remove('drag-over-indicator-before', 'drag-over-indicator-after');
+                    });
+                    dragOverId = targetLi.dataset.id;
+                    updateIndicator(targetLi);
+                } else {
+                    updateIndicator(targetLi);
+                }
+            }
+
+            function handleDrop(e, listType) {
+                e.preventDefault();
+                
+                if (!draggingId || draggingList !== listType) {
+                    return;
+                }
+
+                const pool = (listType === 'media') ? mediaPool : framesPool;
+                const draggingIndex = pool.findIndex(item => item.id === draggingId);
+                if (draggingIndex === -1) return;
+
+                const [draggedItem] = pool.splice(draggingIndex, 1);
+
+                let targetIndex;
+                const targetLi = e.target.closest('li');
+
+                if (targetLi && targetLi.dataset.id !== draggingId) {
+                    targetIndex = pool.findIndex(item => item.id === targetLi.dataset.id);
+                    const rect = targetLi.getBoundingClientRect();
+                    const isAfter = e.clientY > rect.top + rect.height / 2;
+                    if (isAfter) targetIndex++;
+                } else {
+                    targetIndex = pool.length;
+                }
+
+                pool.splice(targetIndex, 0, draggedItem);
+
+                if (listType === 'media') {
+                    renderMediaPool();
+                } else {
+                    renderFramesList();
+                    
+                    if (targetIndex === 0 || draggingIndex === 0) {
+                        if (framesPool.length > 0 && (!outputWidthInput.value || !outputHeightInput.value)) {
+                            setDefaultDimensions(framesPool[0]).catch(console.error);
+                        }
+                    }
+                }
+            }
+
+            mediaList.addEventListener('dragstart', (e) => handleDragStart(e, 'media'));
+            mediaList.addEventListener('dragend', handleDragEnd);
+            mediaList.addEventListener('dragenter', (e) => e.preventDefault());
+            mediaList.addEventListener('dragover', handleDragOver);
+            mediaList.addEventListener('drop', (e) => handleDrop(e, 'media'));
+
+            framesList.addEventListener('dragstart', (e) => handleDragStart(e, 'frames'));
+            framesList.addEventListener('dragend', handleDragEnd);
+            framesList.addEventListener('dragenter', (e) => e.preventDefault());
+            framesList.addEventListener('dragover', handleDragOver);
+            framesList.addEventListener('drop', (e) => handleDrop(e, 'frames'));
+
+
+            // --- 変換処理 (関数として分離) ---
+            async function handleConversion() {
+                if (framesPool.length === 0) {
+                    console.log("変換するフレームがありません。");
+                    return;
+                }
+
+                toggleLoading(true, "準備中...");
+                
+                try {
+                    // --- 1. 設定値を取得 ---
+                    const loops = parseInt(loopInput.value, 10) || 0;
+                    let outputWidth = outputWidthInput.value ? parseInt(outputWidthInput.value, 10) : null;
+                    let outputHeight = outputHeightInput.value ? parseInt(outputHeightInput.value, 10) : null;
+                    
+                    // ▼▼▼ 減色設定をプルダウンから取得 ▼▼▼
+                    const selectedDepth = parseInt(colorDepthSelect.value, 10);
+                    const enableQuantization = selectedDepth > 0;
+                    let quantizeColorCount = 0;
+                    if (enableQuantization) {
+                        quantizeColorCount = Math.pow(2, selectedDepth);
+                    }
+                    // ▲▲▲ 減色設定をプルダウンから取得 ▲▲▲
+
+                    // --- 2. フレームデータを準備 (デコード) ---
+                    const frameImages = []; // デコードされたRGBA8ピクセルデータ (ArrayBuffer)
+                    const frameDelays = []; // 遅延 (ms)
+                    
+                    let firstFrameInfo = null;
+
+                    // ▼▼▼ リサイズ用のオフスクリーンCanvasを準備 ▼▼▼
+                    let resizeCanvas = null;
+                    let resizeCtx = null;
+                    // outputWidth/Height が決定してからセットアップ
+                    // ▲▲▲ リサイズ用のオフスクリーンCanvasを準備 ▲▲▲
+
+                    for (let i = 0; i < framesPool.length; i++) {
+                        const frame = framesPool[i];
+                        toggleLoading(true, `フレーム ${i + 1} / ${framesPool.length} を処理中...`);
+                        
+                        const fileBuffer = await frame.originalFile.arrayBuffer();
+                        const decodedPng = UPNG.decode(fileBuffer);
+                        
+                        if (i === 0) {
+                            firstFrameInfo = decodedPng;
+                            if (outputWidth === null) {
+                                outputWidth = decodedPng.width;
+                            }
+                            if (outputHeight === null) {
+                                outputHeight = decodedPng.height;
+                            }
+
+                            // ▼▼▼ ここでリサイズCanvasの寸法を確定 ▼▼▼
+                            resizeCanvas = document.createElement('canvas');
+                            resizeCtx = resizeCanvas.getContext('2d', { willReadFrequently: true });
+                            resizeCanvas.width = outputWidth;
+                            resizeCanvas.height = outputHeight;
+                            // ▲▲▲ ここでリサイズCanvasの寸法を確定 ▲▲▲
+                        }
+                        
+                        const rgba8Buffer = UPNG.toRGBA8(decodedPng)[0];
+                        
+                        // ▼▼▼ サイズチェックとリサイズ処理 ▼▼▼
+                        if (decodedPng.width === outputWidth && decodedPng.height === outputHeight) {
+                            // サイズが一致する場合、そのまま追加
+                            frameImages.push(rgba8Buffer);
+                        } else {
+                            // サイズが異なる場合、リサイズする
+                            toggleLoading(true, `フレーム ${i + 1} / ${framesPool.length} をリサイズ中...`);
+                            
+                            try {
+                                // 1. 元のピクセルデータからImageDataを作成
+                                const originalImageData = new ImageData(
+                                    new Uint8ClampedArray(rgba8Buffer),
+                                    decodedPng.width,
+                                    decodedPng.height
+                                );
+                                
+                                // 2. ImageDataからImageBitmapを作成 (非同期)
+                                // (createImageBitmapが使えない環境向けのフォールバックは省略)
+                                const imageBitmap = await createImageBitmap(originalImageData);
+                                
+                                // 3. リサイズ用Canvasに描画 (ここでリサイズが発生)
+                                resizeCtx.clearRect(0, 0, outputWidth, outputHeight); // canvasをクリア
+                                resizeCtx.drawImage(imageBitmap, 0, 0, outputWidth, outputHeight);
+                                imageBitmap.close(); // メモリ解放
+                                
+                                // 4. リサイズ後のCanvasからImageDataを取得
+                                const resizedImageData = resizeCtx.getImageData(0, 0, outputWidth, outputHeight);
+                                
+                                // 5. ImageDataのbufferをコピーしてframeImagesに追加
+                                // (UPNG.jsはピュアなArrayBufferを期待するため、.buffer.slice(0)でコピー)
+                                frameImages.push(resizedImageData.data.buffer.slice(0));
+
+                            } catch (resizeError) {
+                                console.error(`フレーム ${i + 1} (${frame.name}) のリサイズに失敗:`, resizeError);
+                                throw new Error(`フレーム ${i + 1} (${frame.name}) のリサイズに失敗しました。`);
+                            }
+                        }
+                        // ▲▲▲ サイズチェックとリサイズ処理 ▲▲▲
+
+                        frameDelays.push(frame.delay);
+                    }
+
+                    // --- 2b. (オプション) 色の量子化 ---
+                    let cnum = 0; // 0 = lossless RGBA (default)
+                    if (enableQuantization) {
+                        toggleLoading(true, `色を圧縮中 (${quantizeColorCount}色)...`);
+                        try {
+                            // UPNG.quantize は frameImages (RGBAのArrayBufferの配列) を
+                            // 8bitインデックスのArrayBufferの配列に「インプレースで」変更します
+                            UPNG.quantize(frameImages, quantizeColorCount); 
+                            cnum = quantizeColorCount;
+                        } catch (quantError) {
+                            console.error("量子化中にエラー:", quantError);
+                            throw new Error(`色の圧縮中にエラーが発生しました: ${quantError.message}`);
+                        }
+                    }
+
+                    toggleLoading(true, "APNGファイルを生成中...");
+
+                    // --- 3. UPNG.jsでエンコード ---
+                    // ▼▼▼ cnum を動的に設定 ▼▼▼
+                    const apngBuffer = UPNG.encode(
+                        frameImages,      // [ArrayBuffer] (RGBA or 8bit-Indexed)
+                        outputWidth,      // W
+                        outputHeight,     // H
+                        cnum,             // 0 (RGBA) or quantizeColorCount
+                        frameDelays,      // [Number] (delays)
+                        loops             
+                    );
+                    // ▲▲▲ cnum を動的に設定 ▲▲▲
+
+                    toggleLoading(true, "ダウンロードを準備中...");
+
+                    // --- 4. ダウンロード処理 ---
+                    const blob = new Blob([apngBuffer], { type: 'image/png' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `animation.png`; 
+                    document.body.appendChild(a);
+                    a.click();
+                    
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+
+                } catch (error) {
+                    console.error("APNG変換中にエラーが発生しました:", error);
+                    // alert() はCanvas環境では機能しない可能性があるため、カスタムUIが望ましいが、
+                    // ひとまず console.error に切り替えるか、既存の alert() を残す。
+                    // ここでは既存の動作を維持。
+                    alert("APNG変換エラー:\n" + error.message); 
+                } finally {
+                    toggleLoading(false);
+                }
+            }
+
+            /**
+             * ローディングUI（ボタンとオーバーレイ）の表示/非表示を切り替える
+             */
+            function toggleLoading(show, progressText = "") {
+                const buttons = [convertBtnTop, convertBtnBottom];
+                
+                if (show) {
+                    if (loadingOverlay) loadingOverlay.classList.remove('hidden');
+                    if (loadingProgress) loadingProgress.textContent = progressText;
+                    
+                    buttons.forEach(btn => {
+                        btn.disabled = true;
+                        const spinner = btn.querySelector('svg');
+                        const text = btn.querySelector('.btn-text');
+                        if (spinner) spinner.classList.remove('hidden');
+                        if (text) text.textContent = '変換中...';
+                    });
+                } else {
+                    if (loadingOverlay) loadingOverlay.classList.add('hidden');
+                    if (loadingProgress) loadingProgress.textContent = "";
+
+                    buttons.forEach(btn => {
+                        btn.disabled = framesPool.length === 0;
+                        const spinner = btn.querySelector('svg');
+                        const text = btn.querySelector('.btn-text');
+                        if (spinner) spinner.classList.add('hidden');
+                        if (text) text.textContent = 'APNGに変換';
+                    });
+                }
+            }
+
+            // ★ 両方のボタンに同じイベントリスナーを登録 ★
+            convertBtnTop.addEventListener('click', handleConversion);
+            convertBtnBottom.addEventListener('click', handleConversion);
+
+            // --- 初期描画 ---
+            renderMediaPool();
+            renderFramesList();
+
+        });
+    </script>
+</body>
+</html>
