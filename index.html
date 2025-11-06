@@ -68,11 +68,36 @@
             height: 4rem; /* h-16 */
             object-fit: cover;
         }
+
+        /* ▼▼▼ モーダル用スタイル ▼▼▼ */
+        #preview-modal {
+            transition: opacity 0.3s ease-in-out, visibility 0.3s ease-in-out;
+        }
+        #preview-modal.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        #preview-modal:not(.hidden) {
+            opacity: 1;
+            visibility: visible;
+        }
+        #preview-image-container {
+            width: 600px; /* 固定幅 */
+            height: 600px; /* 固定高 */
+            max-width: 90vw; /* 画面幅が狭い場合 */
+            max-height: 80vh; /* 画面高が低い場合 */
+        }
+        #preview-image {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        /* ▲▲▲ モーダル用スタイル ▲▲▲ */
     </style>
 </head>
 <body class="bg-slate-900 text-gray-300 min-h-screen p-4 sm:p-8">
 
-    <!-- ▼▼▼ ローディングオーバーレイを追加 ▼▼▼ -->
+    <!-- ▼▼▼ ローディングオーバーレイ ▼▼▼ -->
     <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-75 z-50 flex items-center justify-center hidden">
         <div class="flex flex-col items-center">
             <!-- スピナー (Tailwind CSS) -->
@@ -84,7 +109,32 @@
             <span id="loading-progress" class="text-white text-sm mt-2"></span>
         </div>
     </div>
-    <!-- ▲▲▲ ローディングオーバーレイを追加 ▲▲▲ -->
+    <!-- ▲▲▲ ローディングオーバーレイ ▲▲▲ -->
+
+    <!-- ▼▼▼ プレビューモーダル ▼▼▼ -->
+    <div id="preview-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-40 flex items-center justify-center p-4">
+        <!-- モーダル背景 (クリックで閉じる) -->
+        <div class="absolute inset-0" id="modal-bg-close"></div>
+        
+        <div class="bg-slate-800 shadow-xl z-50 flex flex-col relative" id="preview-image-container">
+            <!-- ヘッダーと閉じるボタン -->
+            <div class="flex justify-between items-center p-4 border-b border-slate-700">
+                <h3 class="text-xl font-semibold text-white">プレビュー</h3>
+                <button id="close-modal-btn" class="text-slate-400 hover:text-white">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- プレビュー画像 -->
+            <div class="p-4 flex-grow flex items-center justify-center overflow-auto">
+                <img id="preview-image" src="" alt="APNG Preview" class="border border-slate-700">
+            </div>
+        </div>
+    </div>
+    <!-- ▲▲▲ プレビューモーダル ▲▲▲ -->
+
 
     <div class="max-w-7xl mx-auto">
         <header class="mb-8 text-center">
@@ -213,7 +263,17 @@
                             </span>
                         </div>
                     </div>
-                    <div class="flex-shrink-0 self-start sm:self-center">
+                    <!-- ▼▼▼ プレビューボタンと変換ボタンのコンテナ ▼▼▼ -->
+                    <div class="flex-shrink-0 self-start sm:self-center flex items-center space-x-3">
+                        <!-- プレビューボタン -->
+                        <button id="preview-btn" class="bg-blue-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-blue-700 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled>
+                            <svg class="animate-spin h-5 w-5 mr-3 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            <span class="btn-text">プレビュー</span>
+                        </button>
+                        <!-- 変換ボタン -->
                         <button id="convert-btn-top" class="bg-green-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-green-700 transition duration-300 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center" disabled>
                             <svg class="animate-spin h-5 w-5 mr-3 hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
@@ -222,6 +282,7 @@
                             <span class="btn-text">APNGに変換</span>
                         </button>
                     </div>
+                    <!-- ▲▲▲ プレビューボタンと変換ボタンのコンテナ ▲▲▲ -->
                 </div>
                 <div id="frames-list-container" class="bg-slate-800 rounded-lg p-1 min-h-[10rem]">
                     <ul id="frames-list" class="space-y-1">
@@ -280,6 +341,14 @@
             const convertBtnTop = document.getElementById('convert-btn-top');
             const convertBtnBottom = document.getElementById('convert-btn-bottom');
             
+            // ▼▼▼ プレビューモーダル関連のDOM要素 ▼▼▼
+            const previewBtn = document.getElementById('preview-btn');
+            const previewModal = document.getElementById('preview-modal');
+            const closeModalBtn = document.getElementById('close-modal-btn');
+            const modalBgClose = document.getElementById('modal-bg-close');
+            const previewImage = document.getElementById('preview-image');
+            // ▲▲▲ プレビューモーダル関連のDOM要素 ▲▲▲
+            
             const seqFrameCountEl = document.getElementById('seq-frame-count');
             const seqDurationEl = document.getElementById('seq-duration');
             const seqAvgFpsEl = document.getElementById('seq-avg-fps');
@@ -294,7 +363,47 @@
             let dragOverId = null;
             let draggingList = null; 
 
+            // ▼▼▼ プレビューキャッシュ用変数 ▼▼▼
+            let lastPreviewBlobUrl = null;
+            let lastPreviewSettingsHash = null;
+            // ▲▲▲ プレビューキャッシュ用変数 ▲▲▲
+
             const supportedTypes = ['image/png'];
+
+            // --- ▼▼▼ プレビューキャッシュ関連 ▼▼▼ ---
+            /**
+             * 現在の設定から一意のハッシュ（簡易的なシリアライズ）を生成する
+             */
+            function getCurrentSettingsHash() {
+                // フレームIDと遅延のリスト
+                const frameSettings = framesPool.map(f => `${f.id}:${f.delay}`).join(',');
+                
+                // その他の設定
+                const otherSettings = [
+                    delayInput.value,
+                    loopInput.value,
+                    outputWidthInput.value,
+                    outputHeightInput.value,
+                    colorDepthSelect.value
+                ].join('|');
+                
+                return `${frameSettings}|${otherSettings}`;
+            }
+
+            /**
+             * プレビューキャッシュを無効化する
+             */
+            function invalidatePreviewCache() {
+                if (lastPreviewBlobUrl) {
+                    URL.revokeObjectURL(lastPreviewBlobUrl);
+                    lastPreviewBlobUrl = null;
+                    // console.log("Preview cache (Blob) revoked."); // デバッグ用
+                }
+                lastPreviewSettingsHash = null;
+                // console.log("Preview cache invalidated."); // デバッグ用
+            }
+            // --- ▲▲▲ プレビューキャッシュ関連 ▲▲▲ ---
+
 
             // --- イベントリスナー ---
 
@@ -355,6 +464,8 @@
                 renderMediaPool();
                 renderFramesList();
                 
+                invalidatePreviewCache(); // ★ キャッシュ無効化
+
                 if (wasFramesPoolEmpty && framesPool.length > 0 && !outputWidthInput.value && !outputHeightInput.value) {
                     try {
                         await setDefaultDimensions(framesPool[0]);
@@ -378,6 +489,7 @@
                 });
                 
                 renderFramesList();
+                invalidatePreviewCache(); // ★ キャッシュ無効化
             });
 
             // --- 入力値検証リスナー (blurイベント) ---
@@ -389,6 +501,7 @@
                 } else {
                     delayInput.value = Math.round(value);
                 }
+                invalidatePreviewCache(); // ★ キャッシュ無効化
             });
             
             loopInput.addEventListener('blur', () => {
@@ -399,6 +512,7 @@
                 } else {
                     loopInput.value = Math.round(value);
                 }
+                invalidatePreviewCache(); // ★ キャッシュ無効化
             });
 
             outputWidthInput.addEventListener('blur', () => {
@@ -410,6 +524,7 @@
                 } else {
                     outputWidthInput.value = Math.round(value);
                 }
+                invalidatePreviewCache(); // ★ キャッシュ無効化
             });
 
             outputHeightInput.addEventListener('blur', () => {
@@ -421,7 +536,12 @@
                 } else {
                     outputHeightInput.value = Math.round(value);
                 }
+                invalidatePreviewCache(); // ★ キャッシュ無効化
             });
+
+            // ★ 色深度セレクトボックスの変更イベント
+            colorDepthSelect.addEventListener('change', invalidatePreviewCache);
+
 
             // --- ファイル処理 ---
             async function handleFiles(files) {
@@ -561,6 +681,7 @@
                 convertBtnTop.disabled = !hasFrames;
                 convertBtnBottom.disabled = !hasFrames;
                 applyDelayAllBtn.disabled = !hasFrames;
+                previewBtn.disabled = !hasFrames; // ★ プレビューボタンの disabled 状態も更新
 
                 framesList.innerHTML = '';
                 
@@ -624,6 +745,7 @@
                         framesPool.splice(index, 1);
                     }
                     renderFramesList();
+                    invalidatePreviewCache(); // ★ キャッシュ無効化
 
                     if (framesPool.length > 0) {
                         if (index === 0 && (!outputWidthInput.value || !outputHeightInput.value)) {
@@ -657,6 +779,7 @@
                     }
                     
                     updateSequenceStats();
+                    invalidatePreviewCache(); // ★ キャッシュ無効化
                 }
             });
 
@@ -758,6 +881,7 @@
                     renderMediaPool();
                 } else {
                     renderFramesList();
+                    invalidatePreviewCache(); // ★ フレームリストの並び替えでキャッシュ無効化
                     
                     if (targetIndex === 0 || draggingIndex === 0) {
                         if (framesPool.length > 0 && (!outputWidthInput.value || !outputHeightInput.value)) {
@@ -780,138 +904,158 @@
             framesList.addEventListener('drop', (e) => handleDrop(e, 'frames'));
 
 
-            // --- 変換処理 (関数として分離) ---
-            async function handleConversion() {
+            // --- ▼▼▼ プレビューモーダル用関数 ▼▼▼ ---
+            function openModal() {
+                if (previewModal) previewModal.classList.remove('hidden');
+            }
+            function closeModal() {
+                if (previewModal) previewModal.classList.add('hidden');
+                // ★★★ キャッシュ保持のため、Blob URLの破棄処理を削除 ★★★
+                // if (previewImage && previewImage.src.startsWith('blob:')) {
+                //     URL.revokeObjectURL(previewImage.src);
+                //     previewImage.src = "";
+                // }
+            }
+            // プレビューボタン専用のローディング切り替え
+            function togglePreviewLoading(show) {
+                if (!previewBtn) return;
+                
+                previewBtn.disabled = show;
+                const spinner = previewBtn.querySelector('svg');
+                const text = previewBtn.querySelector('.btn-text');
+                
+                if (show) {
+                    if (spinner) spinner.classList.remove('hidden');
+                    if (text) text.textContent = '生成中...';
+                } else {
+                    if (spinner) spinner.classList.add('hidden');
+                    if (text) text.textContent = 'プレビュー';
+                    // 変換ボタンと違い、フレームがなければ disabled に戻す
+                    previewBtn.disabled = framesPool.length === 0;
+                }
+            }
+
+            // モーダル閉じるイベント
+            closeModalBtn.addEventListener('click', closeModal);
+            modalBgClose.addEventListener('click', closeModal);
+
+            // --- ▲▲▲ プレビューモーダル用関数 ▲▲▲ ---
+
+
+            // --- ▼▼▼ 共通APNG生成ロジック ▼▼▼ ---
+            /**
+             * 現在のフレームと設定に基づいてAPNGのArrayBufferを生成する
+             * @param {function(string):void} progressCallback - 進捗を報告するコールバック
+             * @returns {Promise<ArrayBuffer>} APNGデータのArrayBuffer
+             */
+            async function generateApngBuffer(progressCallback) {
                 if (framesPool.length === 0) {
-                    console.log("変換するフレームがありません。");
-                    return;
+                    throw new Error("変換するフレームがありません。");
                 }
 
+                // --- 1. 設定値を取得 ---
+                const loops = parseInt(loopInput.value, 10) || 0;
+                let outputWidth = outputWidthInput.value ? parseInt(outputWidthInput.value, 10) : null;
+                let outputHeight = outputHeightInput.value ? parseInt(outputHeightInput.value, 10) : null;
+                
+                const selectedDepth = parseInt(colorDepthSelect.value, 10);
+                const enableQuantization = selectedDepth > 0;
+                let quantizeColorCount = 0;
+                if (enableQuantization) {
+                    quantizeColorCount = Math.pow(2, selectedDepth);
+                }
+
+                // --- 2. フレームデータを準備 (デコード＆リサイズ) ---
+                const frameImages = []; // デコードされたRGBA8ピクセルデータ (ArrayBuffer)
+                const frameDelays = []; // 遅延 (ms)
+                
+                let resizeCanvas = null;
+                let resizeCtx = null;
+
+                for (let i = 0; i < framesPool.length; i++) {
+                    const frame = framesPool[i];
+                    
+                    progressCallback(`フレーム ${i + 1} / ${framesPool.length} を処理中...`);
+                    
+                    const fileBuffer = await frame.originalFile.arrayBuffer();
+                    const decodedPng = UPNG.decode(fileBuffer);
+                    
+                    if (i === 0) {
+                        if (outputWidth === null) outputWidth = decodedPng.width;
+                        if (outputHeight === null) outputHeight = decodedPng.height;
+
+                        resizeCanvas = document.createElement('canvas');
+                        resizeCtx = resizeCanvas.getContext('2d', { willReadFrequently: true });
+                        resizeCanvas.width = outputWidth;
+                        resizeCanvas.height = outputHeight;
+                    }
+                    
+                    const rgba8Buffer = UPNG.toRGBA8(decodedPng)[0];
+                    
+                    if (decodedPng.width === outputWidth && decodedPng.height === outputHeight) {
+                        frameImages.push(rgba8Buffer);
+                    } else {
+                        // リサイズ処理
+                        progressCallback(`フレーム ${i + 1} / ${framesPool.length} をリサイズ中...`);
+                        try {
+                            const originalImageData = new ImageData(
+                                new Uint8ClampedArray(rgba8Buffer),
+                                decodedPng.width,
+                                decodedPng.height
+                            );
+                            const imageBitmap = await createImageBitmap(originalImageData);
+                            resizeCtx.clearRect(0, 0, outputWidth, outputHeight); 
+                            resizeCtx.drawImage(imageBitmap, 0, 0, outputWidth, outputHeight);
+                            imageBitmap.close();
+                            const resizedImageData = resizeCtx.getImageData(0, 0, outputWidth, outputHeight);
+                            frameImages.push(resizedImageData.data.buffer.slice(0));
+                        } catch (resizeError) {
+                            console.error(`フレーム ${i + 1} (${frame.name}) のリサイズに失敗:`, resizeError);
+                            throw new Error(`フレーム ${i + 1} (${frame.name}) のリサイズに失敗しました。`);
+                        }
+                    }
+                    frameDelays.push(frame.delay);
+                }
+
+                // --- 2b. (オプション) 色の量子化 ---
+                let cnum = 0; 
+                if (enableQuantization) {
+                    progressCallback(`色を圧縮中 (${quantizeColorCount}色)...`);
+                    try {
+                        UPNG.quantize(frameImages, quantizeColorCount); 
+                        cnum = quantizeColorCount;
+                    } catch (quantError) {
+                        console.error("量子化中にエラー:", quantError);
+                        throw new Error(`色の圧縮中にエラーが発生しました: ${quantError.message}`);
+                    }
+                }
+
+                progressCallback("APNGファイルを生成中...");
+
+                // --- 3. UPNG.jsでエンコード ---
+                const apngBuffer = UPNG.encode(
+                    frameImages,      
+                    outputWidth,      
+                    outputHeight,     
+                    cnum,             
+                    frameDelays,      
+                    loops             
+                );
+                
+                return apngBuffer; // ArrayBufferを返す
+            }
+            // --- ▲▲▲ 共通APNG生成ロジック ▲▲▲ ---
+
+
+            // --- 変換処理 (ダウンロード) ---
+            async function handleConversion() {
                 toggleLoading(true, "準備中...");
                 
                 try {
-                    // --- 1. 設定値を取得 ---
-                    const loops = parseInt(loopInput.value, 10) || 0;
-                    let outputWidth = outputWidthInput.value ? parseInt(outputWidthInput.value, 10) : null;
-                    let outputHeight = outputHeightInput.value ? parseInt(outputHeightInput.value, 10) : null;
-                    
-                    // ▼▼▼ 減色設定をプルダウンから取得 ▼▼▼
-                    const selectedDepth = parseInt(colorDepthSelect.value, 10);
-                    const enableQuantization = selectedDepth > 0;
-                    let quantizeColorCount = 0;
-                    if (enableQuantization) {
-                        quantizeColorCount = Math.pow(2, selectedDepth);
-                    }
-                    // ▲▲▲ 減色設定をプルダウンから取得 ▲▲▲
-
-                    // --- 2. フレームデータを準備 (デコード) ---
-                    const frameImages = []; // デコードされたRGBA8ピクセルデータ (ArrayBuffer)
-                    const frameDelays = []; // 遅延 (ms)
-                    
-                    let firstFrameInfo = null;
-
-                    // ▼▼▼ リサイズ用のオフスクリーンCanvasを準備 ▼▼▼
-                    let resizeCanvas = null;
-                    let resizeCtx = null;
-                    // outputWidth/Height が決定してからセットアップ
-                    // ▲▲▲ リサイズ用のオフスクリーンCanvasを準備 ▲▲▲
-
-                    for (let i = 0; i < framesPool.length; i++) {
-                        const frame = framesPool[i];
-                        toggleLoading(true, `フレーム ${i + 1} / ${framesPool.length} を処理中...`);
-                        
-                        const fileBuffer = await frame.originalFile.arrayBuffer();
-                        const decodedPng = UPNG.decode(fileBuffer);
-                        
-                        if (i === 0) {
-                            firstFrameInfo = decodedPng;
-                            if (outputWidth === null) {
-                                outputWidth = decodedPng.width;
-                            }
-                            if (outputHeight === null) {
-                                outputHeight = decodedPng.height;
-                            }
-
-                            // ▼▼▼ ここでリサイズCanvasの寸法を確定 ▼▼▼
-                            resizeCanvas = document.createElement('canvas');
-                            resizeCtx = resizeCanvas.getContext('2d', { willReadFrequently: true });
-                            resizeCanvas.width = outputWidth;
-                            resizeCanvas.height = outputHeight;
-                            // ▲▲▲ ここでリサイズCanvasの寸法を確定 ▲▲▲
-                        }
-                        
-                        const rgba8Buffer = UPNG.toRGBA8(decodedPng)[0];
-                        
-                        // ▼▼▼ サイズチェックとリサイズ処理 ▼▼▼
-                        if (decodedPng.width === outputWidth && decodedPng.height === outputHeight) {
-                            // サイズが一致する場合、そのまま追加
-                            frameImages.push(rgba8Buffer);
-                        } else {
-                            // サイズが異なる場合、リサイズする
-                            toggleLoading(true, `フレーム ${i + 1} / ${framesPool.length} をリサイズ中...`);
-                            
-                            try {
-                                // 1. 元のピクセルデータからImageDataを作成
-                                const originalImageData = new ImageData(
-                                    new Uint8ClampedArray(rgba8Buffer),
-                                    decodedPng.width,
-                                    decodedPng.height
-                                );
-                                
-                                // 2. ImageDataからImageBitmapを作成 (非同期)
-                                // (createImageBitmapが使えない環境向けのフォールバックは省略)
-                                const imageBitmap = await createImageBitmap(originalImageData);
-                                
-                                // 3. リサイズ用Canvasに描画 (ここでリサイズが発生)
-                                resizeCtx.clearRect(0, 0, outputWidth, outputHeight); // canvasをクリア
-                                resizeCtx.drawImage(imageBitmap, 0, 0, outputWidth, outputHeight);
-                                imageBitmap.close(); // メモリ解放
-                                
-                                // 4. リサイズ後のCanvasからImageDataを取得
-                                const resizedImageData = resizeCtx.getImageData(0, 0, outputWidth, outputHeight);
-                                
-                                // 5. ImageDataのbufferをコピーしてframeImagesに追加
-                                // (UPNG.jsはピュアなArrayBufferを期待するため、.buffer.slice(0)でコピー)
-                                frameImages.push(resizedImageData.data.buffer.slice(0));
-
-                            } catch (resizeError) {
-                                console.error(`フレーム ${i + 1} (${frame.name}) のリサイズに失敗:`, resizeError);
-                                throw new Error(`フレーム ${i + 1} (${frame.name}) のリサイズに失敗しました。`);
-                            }
-                        }
-                        // ▲▲▲ サイズチェックとリサイズ処理 ▲▲▲
-
-                        frameDelays.push(frame.delay);
-                    }
-
-                    // --- 2b. (オプション) 色の量子化 ---
-                    let cnum = 0; // 0 = lossless RGBA (default)
-                    if (enableQuantization) {
-                        toggleLoading(true, `色を圧縮中 (${quantizeColorCount}色)...`);
-                        try {
-                            // UPNG.quantize は frameImages (RGBAのArrayBufferの配列) を
-                            // 8bitインデックスのArrayBufferの配列に「インプレースで」変更します
-                            UPNG.quantize(frameImages, quantizeColorCount); 
-                            cnum = quantizeColorCount;
-                        } catch (quantError) {
-                            console.error("量子化中にエラー:", quantError);
-                            throw new Error(`色の圧縮中にエラーが発生しました: ${quantError.message}`);
-                        }
-                    }
-
-                    toggleLoading(true, "APNGファイルを生成中...");
-
-                    // --- 3. UPNG.jsでエンコード ---
-                    // ▼▼▼ cnum を動的に設定 ▼▼▼
-                    const apngBuffer = UPNG.encode(
-                        frameImages,      // [ArrayBuffer] (RGBA or 8bit-Indexed)
-                        outputWidth,      // W
-                        outputHeight,     // H
-                        cnum,             // 0 (RGBA) or quantizeColorCount
-                        frameDelays,      // [Number] (delays)
-                        loops             
-                    );
-                    // ▲▲▲ cnum を動的に設定 ▲▲▲
+                    // 共通関数を呼び出し、進捗を toggleLoading に渡す
+                    const apngBuffer = await generateApngBuffer((progressText) => {
+                        toggleLoading(true, progressText);
+                    });
 
                     toggleLoading(true, "ダウンロードを準備中...");
 
@@ -930,14 +1074,69 @@
 
                 } catch (error) {
                     console.error("APNG変換中にエラーが発生しました:", error);
-                    // alert() はCanvas環境では機能しない可能性があるため、カスタムUIが望ましいが、
-                    // ひとまず console.error に切り替えるか、既存の alert() を残す。
-                    // ここでは既存の動作を維持。
                     alert("APNG変換エラー:\n" + error.message); 
                 } finally {
                     toggleLoading(false);
                 }
             }
+            
+            // --- プレビュー処理 ---
+            async function handlePreview() {
+                if (framesPool.length === 0) {
+                    console.log("プレビューするフレームがありません。");
+                    return;
+                }
+
+                // ▼▼▼ キャッシュ確認ロジック ▼▼▼
+                const currentHash = getCurrentSettingsHash();
+                if (currentHash === lastPreviewSettingsHash && lastPreviewBlobUrl) {
+                    // console.log("Using cached preview."); // デバッグ用
+                    previewImage.src = lastPreviewBlobUrl;
+                    openModal();
+                    return; // 再生成せずに終了
+                }
+                // ▲▲▲ キャッシュ確認ロジック ▲▲▲
+                
+                // プレビューボタンをローディング状態に
+                togglePreviewLoading(true);
+
+                try {
+                    // console.log("Generating new preview..."); // デバッグ用
+                    // 共通関数を呼び出し (プレビュー時は簡易的な進捗)
+                    const apngBuffer = await generateApngBuffer((progressText) => {
+                         // プレビューボタンのテキストで進捗を表示 (オプション)
+                         const textEl = previewBtn.querySelector('.btn-text');
+                         if (textEl) textEl.textContent = '生成中...';
+                    }); 
+                    
+                    const blob = new Blob([apngBuffer], { type: 'image/png' });
+                    
+                    // ★ 既存のキャッシュURLがあれば破棄
+                    if (lastPreviewBlobUrl) {
+                        URL.revokeObjectURL(lastPreviewBlobUrl);
+                        // console.log("Old preview cache (Blob) revoked."); // デバッグ用
+                    }
+                    
+                    const url = URL.createObjectURL(blob);
+                    previewImage.src = url;
+
+                    // ▼▼▼ 新しいキャッシュを保存 ▼▼▼
+                    lastPreviewBlobUrl = url;
+                    lastPreviewSettingsHash = currentHash;
+                    // ▲▲▲ 新しいキャッシュを保存 ▲▲▲
+                    
+                    openModal();
+
+                } catch (error) {
+                    console.error("APNGプレビュー生成中にエラーが発生しました:", error);
+                    alert("APNGプレビュー生成エラー:\n" + error.message); 
+                    invalidatePreviewCache(); // エラー時はキャッシュを破棄
+                } finally {
+                    // プレビューボタンのローディング解除
+                    togglePreviewLoading(false);
+                }
+            }
+
 
             /**
              * ローディングUI（ボタンとオーバーレイ）の表示/非表示を切り替える
@@ -949,6 +1148,9 @@
                     if (loadingOverlay) loadingOverlay.classList.remove('hidden');
                     if (loadingProgress) loadingProgress.textContent = progressText;
                     
+                    // 変換中はプレビューボタンも無効化する
+                    if (previewBtn) previewBtn.disabled = true;
+
                     buttons.forEach(btn => {
                         btn.disabled = true;
                         const spinner = btn.querySelector('svg');
@@ -960,6 +1162,9 @@
                     if (loadingOverlay) loadingOverlay.classList.add('hidden');
                     if (loadingProgress) loadingProgress.textContent = "";
 
+                    // 変換完了後、フレームがあればプレビューボタンを有効化
+                    if (previewBtn) previewBtn.disabled = framesPool.length === 0;
+
                     buttons.forEach(btn => {
                         btn.disabled = framesPool.length === 0;
                         const spinner = btn.querySelector('svg');
@@ -970,9 +1175,10 @@
                 }
             }
 
-            // ★ 両方のボタンに同じイベントリスナーを登録 ★
+            // ★ 各ボタンにイベントリスナーを登録 ★
             convertBtnTop.addEventListener('click', handleConversion);
             convertBtnBottom.addEventListener('click', handleConversion);
+            previewBtn.addEventListener('click', handlePreview); // ★ プレビューボタン
 
             // --- 初期描画 ---
             renderMediaPool();
