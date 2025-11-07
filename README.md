@@ -23,7 +23,7 @@ This is a web tool that converts multiple PNG files into an Animated PNG (APNG) 
 - **APNG Preview:** Before downloading, you can check the generated APNG animation in a modal window.
 - **Detailed Frame Settings:** You can reorder frames via drag-and-drop and set the display duration (delay) for each frame individually.
 - **Conversion Options:** Allows setting the loop count, output dimensions (width/height), and color depth (quantization) for file size reduction.
-**Note**: This tool is intended for relatively light processing. Attempting to process high-resolution images exceeding Full HD or a large number of frames (hundreds) at once may cause the browser to crash depending on your PC's memory.
+- **Note**: This tool is intended for relatively light processing. Attempting to process high-resolution images exceeding Full HD or a large number of frames (hundreds) at once may cause the browser to crash depending on your PC's memory.
 
 ## 概要
 複数のPNGファイルをブラウザ上でアニメーションPNG (APNG) に変換するWebツールです。
@@ -32,7 +32,7 @@ This is a web tool that converts multiple PNG files into an Animated PNG (APNG) 
 - **APNGプレビュー機能:** ダウンロードする前に、生成されるAPNGアニメーションをモーダルウィンドウで確認できます。
 - **詳細なフレーム設定:** フレームの順序をドラッグ＆ドロップで並び替えたり、各フレームの表示時間（遅延）を個別に設定したりできます。
 - **変換オプション:** ループ回数、出力サイズ（幅・高さ）、およびファイルサイズ削減のための色深度（減色）指定に対応しています。
-**（注）** 比較的軽い処理を想定しています。フルHDを超える高解像度の画像や、数百枚を超える大量のフレームを一度に処理しようとすると、お使いのPCのメモリ量によってはブラウザがクラッシュする可能性があります。
+- **（注）** 比較的軽い処理を想定しています。フルHDを超える高解像度の画像や、数百枚を超える大量のフレームを一度に処理しようとすると、お使いのPCのメモリ量によってはブラウザがクラッシュする可能性があります。
 
 ## Usage
 1.  Drag and drop PNG files onto the drop zone, or click the zone to select files.
