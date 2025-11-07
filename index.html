@@ -7,7 +7,9 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/upng-js@2.1.0/UPNG.min.js"></script>
-
+    <a href="https://github.com/black-sesame-ice-cream" target="_blank" rel="noopener noreferrer" class="github-icon-link" title="View on GitHub">
+            <img src="images/github-icon.svg" alt="GitHub" />
+    </a>
 
     <style>
         body {
@@ -92,7 +94,7 @@
             max-height: 100%;
             object-fit: contain;
         }
-        
+
         .github-icon-link {position: fixed; top: 4px; left: 4px; z-index: 999;}
         .github-icon-link img {width: 32px; height: 32px;}
         .github-icon-link:hover img {transform: scale(1.1);}
@@ -113,7 +115,6 @@
             <span id="loading-progress" class="text-white text-sm mt-2"></span>
         </div>
     </div>
-    <!-- ▲▲▲ ローディングオーバーレイ ▲▲▲ -->
 
     <!-- ▼▼▼ プレビューモーダル ▼▼▼ -->
     <div id="preview-modal" class="hidden fixed inset-0 bg-black bg-opacity-75 z-40 flex items-center justify-center p-4">
@@ -137,7 +138,6 @@
             </div>
         </div>
     </div>
-    <!-- ▲▲▲ プレビューモーダル ▲▲▲ -->
 
 
     <div class="max-w-7xl mx-auto">
@@ -309,10 +309,6 @@
             </div>
             
         </section>
-
-        <a href="https://github.com/black-sesame-ice-cream/png2apng" target="_blank" rel="noopener noreferrer" class="github-icon-link" title="View on GitHub">
-            <img src="images/github-icon.svg" alt="GitHub" />
-        </a>
         
     </div>
 
@@ -947,10 +943,8 @@
             closeModalBtn.addEventListener('click', closeModal);
             modalBgClose.addEventListener('click', closeModal);
 
-            // --- ▲▲▲ プレビューモーダル用関数 ▲▲▲ ---
 
-
-            // --- ▼▼▼ 共通APNG生成ロジック ▼▼▼ ---
+            // --- ▼▼▼ 共通APNG生成ロジック (進捗コールバックを詳細化) ▼▼▼
             /**
              * 現在のフレームと設定に基づいてAPNGのArrayBufferを生成する
              * @param {function(string):void} progressCallback - 進捗を報告するコールバック
@@ -983,7 +977,8 @@
                 for (let i = 0; i < framesPool.length; i++) {
                     const frame = framesPool[i];
                     
-                    progressCallback(`フレーム ${i + 1} / ${framesPool.length} を処理中...`);
+                    // ▼▼▼ 変更点（フレーム処理中の表示） ▼▼▼
+                    progressCallback(`フレーム ${i + 1} / ${framesPool.length} をデコード中...`);
                     
                     const fileBuffer = await frame.originalFile.arrayBuffer();
                     const decodedPng = UPNG.decode(fileBuffer);
@@ -1004,6 +999,7 @@
                         frameImages.push(rgba8Buffer);
                     } else {
                         // リサイズ処理
+                        // ▼▼▼ 変更点（リサイズ中の表示） ▼▼▼
                         progressCallback(`フレーム ${i + 1} / ${framesPool.length} をリサイズ中...`);
                         try {
                             const originalImageData = new ImageData(
@@ -1028,8 +1024,14 @@
                 // --- 2b. (オプション) 色の量子化 ---
                 let cnum = 0; 
                 if (enableQuantization) {
+                    // ▼▼▼ 変更点（量子化中の表示） ▼▼▼
                     progressCallback(`色を圧縮中 (${quantizeColorCount}色)...`);
+                    
+                    // ▼▼▼ 修正: UIを更新するために少し待機 ▼▼▼
+                    await new Promise(resolve => setTimeout(resolve, 0)); 
+                    
                     try {
+                        // この処理が重い
                         UPNG.quantize(frameImages, quantizeColorCount); 
                         cnum = quantizeColorCount;
                     } catch (quantError) {
@@ -1038,9 +1040,14 @@
                     }
                 }
 
-                progressCallback("APNGファイルを生成中...");
+                // ▼▼▼ 変更点（エンコード中の表示） ▼▼▼
+                progressCallback("APNGファイルを生成中 (エンコード)...");
+
+                // ▼▼▼ 修正: UIを更新するために少し待機 ▼▼▼
+                await new Promise(resolve => setTimeout(resolve, 0));
 
                 // --- 3. UPNG.jsでエンコード ---
+                // この処理が最も重い
                 const apngBuffer = UPNG.encode(
                     frameImages,      
                     outputWidth,      
@@ -1052,7 +1059,6 @@
                 
                 return apngBuffer; // ArrayBufferを返す
             }
-            // --- ▲▲▲ 共通APNG生成ロジック ▲▲▲ ---
 
 
             // --- 変換処理 (ダウンロード) ---
@@ -1088,7 +1094,7 @@
                 }
             }
             
-            // --- プレビュー処理 ---
+            // --- プレビュー処理 (進捗コールバックを詳細化) ---
             async function handlePreview() {
                 if (framesPool.length === 0) {
                     console.log("プレビューするフレームがありません。");
@@ -1103,18 +1109,32 @@
                     openModal();
                     return; // 再生成せずに終了
                 }
-                // ▲▲▲ キャッシュ確認ロジック ▲▲▲
                 
                 // プレビューボタンをローディング状態に
                 togglePreviewLoading(true);
+                // ▼▼▼ プレビューボタンのテキスト要素を取得 ▼▼▼
+                const previewBtnTextEl = previewBtn.querySelector('.btn-text');
 
                 try {
                     // console.log("Generating new preview..."); // デバッグ用
-                    // 共通関数を呼び出し (プレビュー時は簡易的な進捗)
+                    
+                    // ▼▼▼ 変更点（プレビュー時の進捗コールバック） ▼▼▼
+                    // 共通関数を呼び出し (プレビュー時はボタンのテキストに進捗を反映)
                     const apngBuffer = await generateApngBuffer((progressText) => {
-                         // プレビューボタンのテキストで進捗を表示 (オプション)
-                         const textEl = previewBtn.querySelector('.btn-text');
-                         if (textEl) textEl.textContent = '生成中...';
+                         if (previewBtnTextEl) {
+                            // テキストが長くなりすぎないよう調整
+                            if (progressText.includes("デコード中")) {
+                                previewBtnTextEl.textContent = 'デコード中...';
+                            } else if (progressText.includes("リサイズ中")) {
+                                previewBtnTextEl.textContent = 'リサイズ中...';
+                            } else if (progressText.includes("圧縮中")) {
+                                previewBtnTextEl.textContent = '圧縮中...';
+                            } else if (progressText.includes("生成中")) {
+                                previewBtnTextEl.textContent = '生成中...';
+                            } else {
+                                previewBtnTextEl.textContent = '処理中...';
+                            }
+                         }
                     }); 
                     
                     const blob = new Blob([apngBuffer], { type: 'image/png' });
@@ -1126,12 +1146,13 @@
                     }
                     
                     const url = URL.createObjectURL(blob);
+                    
+                    // ▼▼▼ 修正: この行を try ブロック内に移動しました ▼▼▼
                     previewImage.src = url;
 
                     // ▼▼▼ 新しいキャッシュを保存 ▼▼▼
                     lastPreviewBlobUrl = url;
                     lastPreviewSettingsHash = currentHash;
-                    // ▲▲▲ 新しいキャッシュを保存 ▲▲▲
                     
                     openModal();
 
@@ -1141,10 +1162,10 @@
                     invalidatePreviewCache(); // エラー時はキャッシュを破棄
                 } finally {
                     // プレビューボタンのローディング解除
-                    togglePreviewLoading(false);
+                    togglePreviewLoading(false); 
+                    // ※ togglePreviewLoading(false) の中でテキストは 'プレビュー' に戻される
                 }
             }
-
 
             /**
              * ローディングUI（ボタンとオーバーレイ）の表示/非表示を切り替える
@@ -1178,7 +1199,7 @@
                         const spinner = btn.querySelector('svg');
                         const text = btn.querySelector('.btn-text');
                         if (spinner) spinner.classList.add('hidden');
-                        if (text) text.textContent = 'APNGに変換';
+                        if (text) text.textContent = 'APNGを保存'; // ★ テキストを「APNGを保存」に戻す
                     });
                 }
             }
